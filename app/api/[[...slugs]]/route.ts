@@ -30,13 +30,43 @@ const rooms = new Elysia({
         return { roomId }
 
     })
-    .post("/random", async () => {
+    .post("/random", async ({ set }) => {
+        // Try to pop a room from waiting rooms first
         let roomId = await redis.spop("waiting_rooms");
-        const meta = roomId ? await redis.hgetall<{ connected: string[]; createdAt: number }>(`meta:${roomId}`) : null;
 
-        if (!roomId || !meta?.connected || meta.connected.length >= 2) {
+        if (roomId) {
+            const meta = await redis.hgetall<{ connected: string[]; createdAt: number }>(`meta:${roomId}`);
+
+            // If room doesn't exist OR is already full (2 people), create new room
+            if (!meta?.connected || meta.connected.length >= 2) {
+                roomId = await createRoomMeta();
+            }
+            // If room has 1 person, perfect - we'll join it
+        } else {
+            // No waiting rooms at all, create new one
             roomId = await createRoomMeta();
         }
+
+        // Generate a token for the user
+        const token = nanoid();
+
+        // Add user to the room immediately
+        const meta = await redis.hgetall<{ connected: string[]; createdAt: number }>(`meta:${roomId}`);
+        if (meta) {
+            await redis.hset(`meta:${roomId}`, {
+                connected: [...(meta.connected || []), token],
+            });
+
+            // If room now has 2 people, remove it from waiting rooms
+            if (meta.connected && meta.connected.length === 1) {
+                await redis.srem("waiting_rooms", roomId);
+            }
+        }
+
+        // Set the cookie in the response
+        set.headers['set-cookie'] = `x-auth-token=${token}; Path=/; HttpOnly; SameSite=Strict${process.env.NODE_ENV === 'production' ? '; Secure' : ''
+            }`;
+
         return { roomId };
     })
     .use(authMiddleware)
