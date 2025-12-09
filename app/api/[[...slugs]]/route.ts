@@ -32,7 +32,7 @@ const rooms = new Elysia({
     })
     .post("/random", async ({ set }) => {
         // Try to pop a room from waiting rooms first
-        let roomId = await redis.spop("waiting_rooms");
+        let roomId = await redis.spop("waiting_rooms", 1);
 
         if (roomId) {
             const meta = await redis.hgetall<{ connected: string[]; createdAt: number }>(`meta:${roomId}`);
