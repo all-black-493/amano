@@ -4,6 +4,9 @@ import { nanoid } from 'nanoid'
 import { authMiddleware } from './auth'
 import z from 'zod'
 import { Message, realtime } from '@/lib/realtime'
+import {
+    cors
+} from '@elysiajs/cors'
 
 const ROOM_TTL_SECONDS = 60 * 10
 
@@ -122,6 +125,7 @@ const messages = new Elysia({
     })
 
 const app = new Elysia({ prefix: '/api' })
+    .use(cors())
     .use(rooms)
     .use(messages)
 
